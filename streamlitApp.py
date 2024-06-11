@@ -1,70 +1,40 @@
-import gradio as gr
-import cv2
-import tempfile
-import numpy as np
-import random
+import streamlit as st
+import os
 
-def dummy_yolo_detection(frame):
-    # Добавление случайного прямоугольника на кадр для демонстрации
-    height, width, _ = frame.shape
-    x1, y1 = random.randint(0, width // 2), random.randint(0, height // 2)
-    x2, y2 = random.randint(width // 2, width), random.randint(height // 2, height)
-    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-    return frame
+# Создание папки для загрузки файлов
+if not os.path.exists("uploaded_files"):
+    os.makedirs("uploaded_files")
 
-def process_video(video_file, frequency):
-    # Открытие видеофайла с использованием cv2
-    cap = cv2.VideoCapture(video_file.name)
-    if not cap.isOpened():
-        return "Ошибка открытия видеофайла.", None
-    
-    frame_count = 0
-    frame_rate = cap.get(cv2.CAP_PROP_FPS)
-    timestamps = []
-    frames = []
+# Функция для загрузки файлов
+def save_uploaded_file(uploaded_file):
+    with open(os.path.join("uploaded_files", uploaded_file.name), "wb") as f:
+        f.write(uploaded_file.getbuffer())
+    return uploaded_file.name
 
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
+# Функция для получения списка всех файлов в папке
+def get_all_files():
+    return os.listdir('uploaded_files')
 
-        if frame_count % frequency == 0:
-            # Используем пустышку для обработки кадров
-            processed_frame = dummy_yolo_detection(frame)
-            frames.append(processed_frame)
-            timestamps.append(frame_count / frame_rate)
+# Заголовок приложения
+st.title("Загрузите фото и видео, затем выберите файл из списка")
 
-        frame_count += 1
+# Загрузка файлов
+uploaded_files = st.file_uploader("Загрузите фото и видео", accept_multiple_files=True)
+if uploaded_files:
+    for uploaded_file in uploaded_files:
+        save_uploaded_file(uploaded_file)
+    st.success("Файлы загружены")
 
-    cap.release()
+# Получение всех файлов в папке
+all_files = get_all_files()
 
-    if not frames:
-        return "Нет обработанных кадров.", None
+# Поле для выбора файла из выпадающего списка
+selected_file = st.selectbox("Выберите файл", all_files)
+if selected_file:
+    st.write(f"Вы выбрали файл: {selected_file}")
 
-    # Создание видео из обработанных кадров
-    height, width, layers = frames[0].shape
-    temp_output = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
-    out = cv2.VideoWriter(temp_output.name, cv2.VideoWriter_fourcc(*'mp4v'), frame_rate, (width, height))
-
-    for frame in frames:
-        out.write(frame)
-
-    out.release()
-    
-    return temp_output.name, np.array(timestamps).reshape(-1, 1)
-
-iface = gr.Interface(
-    fn=process_video,
-    inputs=[
-        gr.Video(label="Загрузите видео"),
-        gr.Slider(1, 100, step=1, label="Частота разбиения (кадры)")
-    ],
-    outputs=[
-        gr.Video(label="Обработанное видео"),
-        gr.Dataframe(headers=["Временная метка (секунды)"], label="Временные метки")
-    ],
-    title="Обработка видео",
-    description="Загрузите видео, чтобы увидеть временные метки кадров. Частота разбиения указывает, как часто анализировать кадры."
-)
-
-iface.launch()
+# Отображение выбранного файла
+if selected_file and selected_file.endswith('.mp4'):
+    st.video(os.path.join('uploaded_files', selected_file))
+elif selected_file:
+    st.image(os.path.join('uploaded_files', selected_file))
